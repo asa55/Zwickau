@@ -66,7 +66,7 @@ incoming_ray_height = 24.96;         %++++++++++++++++++++++%
 % Then an equation describing its path to the slanted mirror boundary is:
 difference = 100; % initialize variable
 for i=1:length(x)
-    if abs(y_sample(i) - incoming_ray_height) < difference
+    if abs(y_sample(i) - incoming_ray_height) < difference 
         x_i = i;
         difference = abs(y_sample(i) - incoming_ray_height);
     end
