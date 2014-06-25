@@ -1,0 +1,174 @@
+%%% You may want to save the following function as theta_d.m before running the code below it...
+function [ theta_d_radians, n ] = theta_d( lambda, alpha, theta )
+B2=.0231792344;
+B3=1.01046945;
+C1=.00600069867;
+C2=.0200179144;
+C3=103.560653;
+
+n=(B1*lambda.^2./(lambda.^2-C1)+B2*lambda.^2./(lambda.^2-C2)+B3*lambda.^2./(lambda.^2-C3)+1).^(.5);
+
+theta_d_radians = theta - alpha + asin(sqrt(n.^2-sin(theta).^2)*sin(alpha) - sin(theta)*cos(alpha));
+theta_d_degrees=theta_d_radians*180/pi;
+end
+
+
+
+
+% Set total length of test arm. Position x = 0 corresponds to the distance
+% between the flat face of the sample (at 0 degrees) and the center of the
+% mirror.
+step=.001;
+x = [-177.53:step:53.64];
+
+% Set the dimensions of the sample
+Rd_max = 8; %(max thickness in mm)  %++++++++++++++++++++++%
+phi = 40; %(diameter in mm)
+wedge_angle_degrees = 3.52;         %++++++++++++++++++++++%
+wedge_angle_radians = wedge_angle_degrees*pi/180;
+delta_Rd = phi*tan(wedge_angle_radians);
+Rd_min = Rd_max - delta_Rd;
+
+% Define mirror angle during the test setup
+mirror_angle_degrees = 4.127;       %+++++++++++++++++++++++%
+mirror_angle_radians = mirror_angle_degrees*pi/180;
+
+% Set the valid wavelength domain of the scope (in micrometers)
+lambda=.4:.001:.8;                  %++++++++++++++++++++++%
+
+% Define an equation for the line defining the sloped boundary of the
+% sample
+y_sample = (phi/delta_Rd)*(x-Rd_min);
+
+% Define an equation for the line describing the mirror boundary
+y_mirror = (-1/atan(mirror_angle_radians))*(x-53.64);
+
+% Display current situation
+figure(100),pause(.75)
+line([0,0],[0,40],'LineWidth',2,'Color',[0 0 0]), xlim([-177.53,53.64]), ylim([0,40]) % I would prefer to find a function to make this vertical line black instead of blue
+hold on
+plot(x,y_sample,'LineWidth',2,'Color',[0 0 0]),title('Ray Tracing Simulation: Light in the Test Arm of an Interferometer through an N-BK7 Wedge'), xlabel('X Position (mm)'), ylabel('Y Position (mm)')
+pause(0.75)
+plot(x,y_mirror,'LineWidth',2,'Color',[0 0 .8])
+hold off
+
+% Get the ray angles as a function of wavelength at the 2-3 boundary.
+%%% The angle of the rays into the wedge with respect to wavelength must be
+%%% known. In this case, the initial angle for all lambda is 0 degrees.
+theta_radians = zeros(1,length(lambda));
+[theta_d_radians, n] = theta_d( lambda, wedge_angle_radians, theta_radians );
+
+% This angle is the deflection from the original horizontal path and is the
+% first time the ray is sepatated into its individual wavelength
+% components.
+% If the original ray enters the wedge at the height given below (in mm):
+incoming_ray_height = 24.96;         %++++++++++++++++++++++%
+% Then an equation describing its path to the slanted mirror boundary is:
+difference = 100; % initialize variable
+for i=1:length(x)
+    if abs(y_sample(i) - incoming_ray_height) < difference
+        x_i = i;
+        difference = abs(y_sample(i) - incoming_ray_height);
+    end
+end
+y_incoming_ray = incoming_ray_height*ones(1,length([x(1):x(x_i)]));
+% As is shown here:
+figure(100),pause(.75),hold on,plot([x(1):x(x_i)],y_incoming_ray,'g'),hold off
+
+% The red and blue components have the following equations:
+y_blue = tan(theta_d_radians(1))*(x([x_i:end]) - x(x_i)) + incoming_ray_height;
+y_red = tan(theta_d_radians(end))*(x([x_i:end]) - x(x_i)) + incoming_ray_height;
+% And are shown after the next set of for loops.
+
+% The angle at which each component returns from the mirror
+% boundary is given by:
+return_angle_radians = 2*(theta_d_radians - mirror_angle_radians);
+
+% Equations describing the return paths can be calculated as follows:
+x_mirror_blue_interface = 0;
+x_mirror_red_interface = 0;
+difference = 100;
+for i=x_i:(length(y_blue)+x_i-1)
+    if abs(y_blue(i-x_i+1) - y_mirror(i)) < difference
+        x_mirror_blue_interface = i;
+        difference = abs(y_blue(i-x_i+1) - y_mirror(i));
+    end
+end
+difference = 100;
+for i=x_i:(length(y_red)+x_i-1)
+    if abs(y_red(i-x_i+1) - y_mirror(i)) < difference
+        x_mirror_red_interface = i;
+        difference = abs(y_red(i-x_i+1) - y_mirror(i));
+    end
+end
+y_mirror_blue_interface = tan(-return_angle_radians(1))*(x([1:x_mirror_blue_interface]) - x(x_mirror_blue_interface)) + y_mirror(x_mirror_blue_interface);
+y_mirror_red_interface = tan(-return_angle_radians(end))*(x([1:x_mirror_red_interface]) - x(x_mirror_red_interface)) + y_mirror(x_mirror_red_interface);
+% Here are the paths referenced above.
+figure(100),pause(.75),hold on,plot([x(x_i:x_mirror_blue_interface)],y_blue([1:length([x_i:x_mirror_blue_interface])]),'b'),plot([x(x_i:x_mirror_red_interface)],y_red([1:length([x_i:x_mirror_red_interface])]),'r'),hold off
+% (These for loops are here for the last path calculation as well as plotting the boundaries of the current path)
+difference = 100;
+for i=1:x_mirror_blue_interface
+    if abs(y_mirror_blue_interface(i) - y_sample(i)) < difference
+        x_return_blue = i;
+        difference = abs(y_mirror_blue_interface(i) - y_sample(i));
+    end
+end
+difference = 100;
+for i=1:x_mirror_red_interface
+    if abs(y_mirror_red_interface(i) - y_sample(i)) < difference
+        x_return_red = i;
+        difference = abs(y_mirror_red_interface(i) - y_sample(i));
+    end
+end
+figure(100),pause(.75),hold on,plot([x(x_return_blue:x_mirror_blue_interface)],y_mirror_blue_interface([x_return_blue:end]),'b'),plot([x(x_return_red:x_mirror_red_interface)],y_mirror_red_interface([x_return_red:end]),'r'),hold off
+
+% Now we recognize that the equation given in Saleh&Teich for theta_d does
+% not give the angle for the path through the material, but rather the
+% angle for the path of a ray after it has completely passed through the
+% material. For this reason, a simplifying assumption is made that the ray
+% trajectory through the material has negligible excess displacement in the
+% y direction after it enters the material, hence the new trajectory on the
+% return path through the material begins at the slanted boundary.
+
+% The new angle theta relevant in the equation for theta_d is given by:
+theta_return_radians = zeros(1,length(theta_radians));
+theta_return_radians(1) = -return_angle_radians(1)+atan(-1/(phi/delta_Rd));
+theta_return_radians(end) = -return_angle_radians(end)+atan(-1/(phi/delta_Rd));
+% Plugging it into the equation is accomplished as:
+[theta_d_return_radians, n] = theta_d( lambda, wedge_angle_radians, theta_return_radians );
+% This gives a total angle of:
+final_angle_radians = zeros(1,length(theta_radians));
+final_angle_radians(1) = theta_return_radians(1) - theta_d_return_radians(1);
+final_angle_radians(end) = theta_return_radians(end) - theta_d_return_radians(end);
+% Leaving line equations for the returning rays as follows:
+
+y_return_blue = tan(final_angle_radians(1))*(x([1:x_return_blue]) - x(x_return_blue)) + y_sample(x_return_blue);
+y_return_red = tan(final_angle_radians(end))*(x([1:x_return_red]) - x(x_return_red)) + y_sample(x_return_red);
+figure(100),pause(.75),hold on,plot([x(1:x_return_blue)],y_return_blue,'b'),plot([x(1:x_return_red)],y_return_red,'r'),hold off
+
+% The optical pathlength for each wavelength passing through the material 
+% is given by the following calculations:
+% Distance through sample on first pass:
+d1_blue = n(1)*x(x_i)
+d1_red = n(end)*x(x_i);
+% Distance from sample to mirror:
+d2_blue = sqrt((y_mirror(x_mirror_blue_interface)-incoming_ray_height)^2 + (x(x_mirror_blue_interface)-x(x_i))^2);
+d2_red = sqrt((y_mirror(x_mirror_red_interface)-incoming_ray_height)^2 + (x(x_mirror_red_interface)-x(x_i))^2);
+% Distance from the mirror back to the sample:
+d3_blue = sqrt((y_mirror(x_mirror_blue_interface)-y_mirror_blue_interface(x_return_blue))^2 + (x(x_mirror_blue_interface)-x(x_return_blue))^2);
+d3_red = sqrt((y_mirror(x_mirror_red_interface)-y_mirror_red_interface(x_return_red))^2 + (x(x_mirror_red_interface)-x(x_return_red))^2);
+% Distance through the sample on the way back
+d4_blue = n(1)*x(x_return_blue)
+d4_red = n(end)*x(x_return_red);
+% Total distance:
+d_total_blue = d1_blue + d2_blue + d3_blue + d4_blue;
+d_total_red = d1_red + d2_red + d3_red + d4_red;
+d_test = (d_total_blue + d_total_red)/2;
+
+% This distance must be compared with the distance traversed in the
+% reference arm where there is no sample and no mirror angle
+d_reference = 2*(x(x_mirror_blue_interface) + x(x_mirror_red_interface))/2; % This is the geometric average between the locations where red and blue hit the mirror in the x direction.
+
+% The excess distance traveled in the test arm is then:
+excess_distance = d_test - d_reference %% An example on how to use this would be to get a figure at the max and min widths, then take the difference. Compare this to the max and min difference measured by interference data.
+
